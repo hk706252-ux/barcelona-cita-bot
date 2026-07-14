@@ -7,14 +7,13 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import Select
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from webdriver_manager.chrome import ChromeDriverManager
 
 # GitHub secrets / values
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "8764819127:AAGtHY9HMyfoLDou9aQbz9APehGBd9ytTTo")
 CHAT_ID = os.getenv("CHAT_ID", "8246088794")
 URL = "https://icp.administracionelectronica.gob.es/icpplus/index.html"
 
-PROVINCES_TO_CHECK = ["Badajoz"]
+PROVINCES_TO_CHECK = ["Badajoz"] # Testing ke liye Badajoz hi rehne dete hain
 TRAMITES_TO_CHECK = [
     "POLICIA-TOMA DE HUELLAS (EXPEDICIÓN DE TARJETA) INICIAL, RENOVACIÓN, DUPLICADO Y LEY 14/2013"
 ]
@@ -37,28 +36,31 @@ def send_telegram_professional(province, tramite, office_name):
 
 def check_cita_previa():
     options = webdriver.ChromeOptions()
-    # GitHub Actions ke liye stable headless settings
     options.add_argument("--headless=new")  
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-gpu")
-    options.add_argument("--disable-extensions")
-    options.add_argument("--window-size=1920,1080")
-    options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-
-    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
-    wait = WebDriverWait(driver, 20)
+    options.add_argument("--disable-blink-features=AutomationControlled")
+    
+    # Bina webdriver-manager ke default system chrome use karte hain jo stable hai
+    driver = webdriver.Chrome(options=options)
+    driver.set_page_load_timeout(30) # 30 seconds limit taaki hang na ho
+    wait = WebDriverWait(driver, 15)
     
     try:
         for province in PROVINCES_TO_CHECK:
             print(f"🔄 Connecting to site for {province}...")
-            driver.get(URL)
+            try:
+                driver.get(URL)
+            except Exception as e:
+                print(f"⚠️ Page load took too long, attempting to proceed... {e}")
+                
             wait.until(EC.presence_of_element_located((By.NAME, "provincia")))
-            time.sleep(2)
+            time.sleep(1)
             
             Select(driver.find_element(By.NAME, "provincia")).select_by_visible_text(province)
             driver.find_element(By.ID, "btnAceptar").click()
-            time.sleep(3)
+            time.sleep(2)
 
             office_elements = driver.find_elements(By.NAME, "sede")
             if not office_elements:
@@ -78,11 +80,11 @@ def check_cita_previa():
                         wait.until(EC.presence_of_element_located((By.NAME, "provincia")))
                         Select(driver.find_element(By.NAME, "provincia")).select_by_visible_text(province)
                         driver.find_element(By.ID, "btnAceptar").click()
-                        time.sleep(3)
+                        time.sleep(2)
                     except Exception as e:
                         print(f"⚠️ Error checking office {office[:20]}: {e}")
                         driver.get(URL)
-                        time.sleep(2)
+                        time.sleep(1)
                         continue
     except Exception as e:
         print(f"❌ Main Error: {e}")
@@ -100,12 +102,12 @@ def run_tramites(driver, province, office_name):
                 if any(tramite in opt for opt in options_text):
                     tramite_select.select_by_visible_text(tramite)
                     driver.find_element(By.ID, "btnAceptar").click()
-                    time.sleep(2)
+                    time.sleep(1)
 
                     entrar_btn = driver.find_elements(By.ID, "btnEntrar")
                     if entrar_btn:
                         entrar_btn[0].click()
-                        time.sleep(2)
+                        time.sleep(1)
 
                     content = driver.page_source
                     if "No hay citas disponibles" in content or "En este momento no hay citas" in content:
