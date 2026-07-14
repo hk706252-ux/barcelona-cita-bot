@@ -1,122 +1,70 @@
 import os
-import time
 import requests
-from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import Select
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
 
 # GitHub secrets / values
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "8764819127:AAGtHY9HMyfoLDou9aQbz9APehGBd9ytTTo")
 CHAT_ID = os.getenv("CHAT_ID", "8246088794")
-URL = "https://icp.administracionelectronica.gob.es/icpplus/index.html"
 
-PROVINCES_TO_CHECK = ["Badajoz"] # Testing ke liye Badajoz hi rehne dete hain
-TRAMITES_TO_CHECK = [
-    "POLICIA-TOMA DE HUELLAS (EXPEDICIÓN DE TARJETA) INICIAL, RENOVACIÓN, DUPLICADO Y LEY 14/2013"
-]
+# Testing ke liye "Badajoz" set hai. Jab test ho jaye toh ise wapas "Barcelona" kar lijiyega.
+PROVINCE_NAME = "Badajoz" 
+TRAMITE_NAME = "POLICIA-TOMA DE HUELLAS (EXPEDICIÓN DE TARJETA) INICIAL, RENOVACIÓN, DUPLICADO Y LEY 14/2013"
 
-def send_telegram_professional(province, tramite, office_name):
+def send_telegram_alert(province, office_name):
     telegram_url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     message_text = (
         "🚨 !!! APPOINTMENT SLOT FOUND !!! 🚨\n\n"
         f"📍 *Province:* {province}\n"
-        f"💼 *Tramite:* {tramite}\n"
+        f"💼 *Tramite:* {TRAMITE_NAME[:40]}...\n"
         f"🏢 *Office:* {office_name}\n\n"
         "🔗 *Book Here:* https://icp.administracionelectronica.gob.es/icpplus/index.html"
     )
     payload = {"chat_id": CHAT_ID, "text": message_text, "parse_mode": "Markdown"}
     try:
         requests.post(telegram_url, json=payload)
-        print(f"🚀 Alert sent for {office_name}!")
+        print(f"🚀 Telegram Alert Sent for {office_name}!")
     except Exception as e:
         print(f"Telegram Error: {e}")
 
-def check_cita_previa():
-    options = webdriver.ChromeOptions()
-    options.add_argument("--headless=new")  
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("--disable-gpu")
-    options.add_argument("--disable-blink-features=AutomationControlled")
+def check_cita():
+    print(f"🔄 Checking Cita Previa for {PROVINCE_NAME}...")
     
-    # Bina webdriver-manager ke default system chrome use karte hain jo stable hai
-    driver = webdriver.Chrome(options=options)
-    driver.set_page_load_timeout(30) # 30 seconds limit taaki hang na ho
-    wait = WebDriverWait(driver, 15)
+    # Government site URL to simulate form posting
+    post_url = "https://icp.administracionelectronica.gob.es/icpplus/citar"
     
+    # Headers to look like a real browser request
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Referer": "https://icp.administracionelectronica.gob.es/icpplus/index.html",
+        "Content-Type": "application/x-www-form-urlencoded"
+    }
+    
+    # Step 1: Submit province selection
+    # Province IDs: Badajoz is typically "06", Barcelona is "08"
+    province_id = "06" if PROVINCE_NAME == "Badajoz" else "08"
+    
+    payload = {
+        "conFormat": "true",
+        "provincia": province_id,
+        "btnAceptar": "Aceptar"
+    }
+    
+    session = requests.Session()
     try:
-        for province in PROVINCES_TO_CHECK:
-            print(f"🔄 Connecting to site for {province}...")
-            try:
-                driver.get(URL)
-            except Exception as e:
-                print(f"⚠️ Page load took too long, attempting to proceed... {e}")
-                
-            wait.until(EC.presence_of_element_located((By.NAME, "provincia")))
-            time.sleep(1)
+        # Connect first to establish cookies
+        session.get("https://icp.administracionelectronica.gob.es/icpplus/index.html", headers=headers, timeout=15)
+        
+        # Submit the province form
+        response = session.post(post_url, data=payload, headers=headers, timeout=15)
+        
+        if "No hay citas disponibles" in response.text or "En este momento no hay citas" in response.text:
+            print("❌ No slots available at the moment.")
+        else:
+            # If the output doesn't contain the "No appointments" text, it means slots might be open!
+            print("🎉 SLOTS MIGHT BE AVAILABLE! Sending notification...")
+            send_telegram_alert(PROVINCE_NAME, "Oficina Principal / Sede")
             
-            Select(driver.find_element(By.NAME, "provincia")).select_by_visible_text(province)
-            driver.find_element(By.ID, "btnAceptar").click()
-            time.sleep(2)
-
-            office_elements = driver.find_elements(By.NAME, "sede")
-            if not office_elements:
-                run_tramites(driver, province, "Cualquier Oficina")
-            else:
-                office_select = Select(office_elements[0])
-                offices = [opt.text.strip() for opt in office_select.options if opt.text.strip() and "Seleccione" not in opt.text]
-                
-                for office in offices:
-                    try:
-                        print(f"🏢 Checking: {office[:30]}...")
-                        Select(driver.find_element(By.NAME, "sede")).select_by_visible_text(office)
-                        run_tramites(driver, province, office)
-                        
-                        # Reset for next office
-                        driver.get(URL)
-                        wait.until(EC.presence_of_element_located((By.NAME, "provincia")))
-                        Select(driver.find_element(By.NAME, "provincia")).select_by_visible_text(province)
-                        driver.find_element(By.ID, "btnAceptar").click()
-                        time.sleep(2)
-                    except Exception as e:
-                        print(f"⚠️ Error checking office {office[:20]}: {e}")
-                        driver.get(URL)
-                        time.sleep(1)
-                        continue
     except Exception as e:
-        print(f"❌ Main Error: {e}")
-    finally:
-        driver.quit()
-
-def run_tramites(driver, province, office_name):
-    try:
-        tramite_boxes = driver.find_elements(By.ID, "tramiteGrupo[0]") or driver.find_elements(By.ID, "tramiteGrupo[1]")
-        if tramite_boxes:
-            tramite_select = Select(tramite_boxes[0])
-            options_text = [opt.text for opt in tramite_select.options]
-            
-            for tramite in TRAMITES_TO_CHECK:
-                if any(tramite in opt for opt in options_text):
-                    tramite_select.select_by_visible_text(tramite)
-                    driver.find_element(By.ID, "btnAceptar").click()
-                    time.sleep(1)
-
-                    entrar_btn = driver.find_elements(By.ID, "btnEntrar")
-                    if entrar_btn:
-                        entrar_btn[0].click()
-                        time.sleep(1)
-
-                    content = driver.page_source
-                    if "No hay citas disponibles" in content or "En este momento no hay citas" in content:
-                        print(f"   ❌ No slots.")
-                    else:
-                        print(f"   🎉 SLOT FOUND IN {office_name}!!!")
-                        send_telegram_professional(province, tramite, office_name)
-    except Exception as e:
-        print(f"⚠️ Error in run_tramites: {e}")
+        print(f"❌ Connection/Request Error: {e}")
 
 if __name__ == "__main__":
-    check_cita_previa()
+    check_cita()
