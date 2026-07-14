@@ -14,7 +14,7 @@ TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "8764819127:AAGtHY9HMyfoLDou9aQbz9A
 CHAT_ID = os.getenv("CHAT_ID", "8246088794")
 URL = "https://icp.administracionelectronica.gob.es/icpplus/index.html"
 
-PROVINCES_TO_CHECK = ["Barcelona"]
+PROVINCES_TO_CHECK = ["Badajoz"]
 TRAMITES_TO_CHECK = [
     "POLICIA-TOMA DE HUELLAS (EXPEDICIÓN DE TARJETA) INICIAL, RENOVACIÓN, DUPLICADO Y LEY 14/2013"
 ]
