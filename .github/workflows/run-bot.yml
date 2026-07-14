@@ -2,7 +2,7 @@ name: Run Cita Bot Barcelona
 
 on:
   schedule:
-    - cron: '*/15 * * * *' # Har 15 minute baad automatic chalega
+    - cron: '*/5 * * * *' # Har 15 minute baad automatic chalega
   workflow_dispatch: # Manually chalane ke liye button
 
 jobs:
