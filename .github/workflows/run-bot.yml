@@ -1,0 +1,25 @@
+name: Run Cita Bot Barcelona
+
+on:
+  schedule:
+    - cron: '*/15 * * * *' # Har 15 minute baad automatic chalega
+  workflow_dispatch: # Manually chalane ke liye button
+
+jobs:
+  run-bot:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install Dependencies
+        run: |
+          pip install selenium webdriver-manager requests
+
+      - name: Run Python Script
+        run: python bot.py
