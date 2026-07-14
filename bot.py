@@ -9,7 +9,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from webdriver_manager.chrome import ChromeDriverManager
 
-# GitHub secrets se hum tokens read karenge taaki secure rahe
+# GitHub secrets / values
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "8764819127:AAGtHY9HMyfoLDou9aQbz9APehGBd9ytTTo")
 CHAT_ID = os.getenv("CHAT_ID", "8246088794")
 URL = "https://icp.administracionelectronica.gob.es/icpplus/index.html"
@@ -37,13 +37,17 @@ def send_telegram_professional(province, tramite, office_name):
 
 def check_cita_previa():
     options = webdriver.ChromeOptions()
-    options.add_argument("--headless")  # Server par headless chalana zaroori hai
+    # GitHub Actions ke liye stable headless settings
+    options.add_argument("--headless=new")  
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+    options.add_argument("--disable-gpu")
+    options.add_argument("--disable-extensions")
+    options.add_argument("--window-size=1920,1080")
+    options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
 
     driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
-    wait = WebDriverWait(driver, 30)
+    wait = WebDriverWait(driver, 20)
     
     try:
         for province in PROVINCES_TO_CHECK:
@@ -69,18 +73,19 @@ def check_cita_previa():
                         Select(driver.find_element(By.NAME, "sede")).select_by_visible_text(office)
                         run_tramites(driver, province, office)
                         
-                        # Reset to main page for next office
+                        # Reset for next office
                         driver.get(URL)
                         wait.until(EC.presence_of_element_located((By.NAME, "provincia")))
                         Select(driver.find_element(By.NAME, "provincia")).select_by_visible_text(province)
                         driver.find_element(By.ID, "btnAceptar").click()
                         time.sleep(3)
-                    except:
+                    except Exception as e:
+                        print(f"⚠️ Error checking office {office[:20]}: {e}")
                         driver.get(URL)
                         time.sleep(2)
                         continue
     except Exception as e:
-        print(f"❌ Error: {e}")
+        print(f"❌ Main Error: {e}")
     finally:
         driver.quit()
 
@@ -108,8 +113,8 @@ def run_tramites(driver, province, office_name):
                     else:
                         print(f"   🎉 SLOT FOUND IN {office_name}!!!")
                         send_telegram_professional(province, tramite, office_name)
-    except:
-        pass
+    except Exception as e:
+        print(f"⚠️ Error in run_tramites: {e}")
 
 if __name__ == "__main__":
     check_cita_previa()
